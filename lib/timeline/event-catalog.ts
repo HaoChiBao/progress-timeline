@@ -14,6 +14,10 @@ export type TimelineTick = {
   eventType: string;
   /** Optional short note when adding manually. */
   note?: string;
+  /** User tags, e.g. launch, auth — also parsed from #hashtags in note. */
+  tags?: string[];
+  /** Link to Linear issue, GitHub PR, Notion page, etc. */
+  externalUrl?: string;
   occurredAt: string;
   createdAt: string;
 };
@@ -96,3 +100,27 @@ export function defaultEventType(source: TimelineSource): string {
 }
 
 export const TIMELINE_SOURCE_LIST = Object.values(TIMELINE_SOURCES);
+
+/** Single-letter prefix so ticks are identifiable without color alone. */
+export const SOURCE_PREFIX: Record<TimelineSource, string> = {
+  github: "G",
+  linear: "L",
+  notion: "N",
+  figma: "F",
+  general: "·",
+};
+
+export function getSourcePrefix(source: TimelineSource): string {
+  return SOURCE_PREFIX[source];
+}
+
+export function tickAriaLabel(tick: TimelineTick): string {
+  const parts = [
+    TIMELINE_SOURCES[tick.source].label,
+    getEventTypeLabel(tick.source, tick.eventType),
+    new Date(tick.occurredAt).toLocaleString(),
+    tick.note,
+    tick.tags?.length ? `tags: ${tick.tags.join(", ")}` : undefined,
+  ].filter(Boolean);
+  return parts.join(", ");
+}

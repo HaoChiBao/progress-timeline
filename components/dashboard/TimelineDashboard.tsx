@@ -3,12 +3,19 @@
 import { AddTimelineEvent } from "@/components/dashboard/AddTimelineEvent";
 import { AllTimelinesView } from "@/components/dashboard/AllTimelinesView";
 import { AsciiTimeline } from "@/components/dashboard/AsciiTimeline";
+import {
+  DEFAULT_FILTERS,
+  TimelineDock,
+  type TimelineVisualMode,
+} from "@/components/dashboard/TimelineDock";
 import { ProjectSwitcher } from "@/components/dashboard/ProjectSwitcher";
 import { SourceLegend } from "@/components/dashboard/SourceLegend";
+import { TimelineListView } from "@/components/dashboard/TimelineListView";
 import {
   type TimelineSource,
   defaultEventType,
 } from "@/lib/timeline/event-catalog";
+import { applyLinkToDraft, parseTimelineLink } from "@/lib/timeline/link-parser";
 import {
   archiveProject,
   createProject,
@@ -20,32 +27,87 @@ import {
   saveActiveProjectId,
   unarchiveProject,
 } from "@/lib/timeline/project-storage";
-import { addTick, loadTicks } from "@/lib/timeline/timeline-storage";
+import { filterTicks, type TimelineFilterState } from "@/lib/timeline/tick-filters";
+import {
+  addTick,
+  clearDraft,
+  emptyDraft,
+  isLocalTickId,
+  loadDraft,
+  loadLastTickPrefs,
+  loadTicks,
+  removeTick,
+  saveDraft,
+  type TickDraft,
+} from "@/lib/timeline/timeline-storage";
 import {
   fetchServerTicks,
   mergeTicks,
 } from "@/lib/timeline/merge-ticks";
-import { useCallback, useEffect, useState } from "react";
+import { buildWeekSummary } from "@/lib/timeline/week-summary";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const VIEW_MODE_KEY = "pg-timeline-view-mode";
+const VISUAL_MODE_KEY = "pg-timeline-visual-mode";
+const FILTERS_KEY = "pg-timeline-filters";
+
+const VISUAL_CYCLE: TimelineVisualMode[] = [
+  "reveal",
+  "bars",
+  "letters",
+  "list",
+];
+
+function parseStoredVisualMode(raw: string | null): TimelineVisualMode {
+  if (raw === "list" || raw === "bars" || raw === "letters" || raw === "reveal") {
+    return raw;
+  }
+  if (raw === "ascii") return "reveal";
+  return "reveal";
+}
+
+function datetimeLocalToIso(value: string): string | undefined {
+  if (!value.trim()) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
 
 export function TimelineDashboard() {
   const [projects, setProjects] = useState<ReturnType<typeof loadProjects>>([]);
   const [activeProjectId, setActiveProjectId] = useState("");
   const [viewMode, setViewMode] = useState<"single" | "all">("single");
+  const [visualMode, setVisualMode] = useState<TimelineVisualMode>("reveal");
+  const [filters, setFilters] = useState<TimelineFilterState>(DEFAULT_FILTERS);
   const [ticksByProject, setTicksByProject] = useState<
     Record<string, ReturnType<typeof loadTicks>>
   >({});
   const [ticks, setTicks] = useState<ReturnType<typeof loadTicks>>([]);
   const [isAdding, setIsAdding] = useState(false);
-  const [source, setSource] = useState<TimelineSource>("general");
-  const [eventType, setEventType] = useState(() =>
-    defaultEventType("general")
+  const [draft, setDraft] = useState<TickDraft>(emptyDraft());
+  const [externalUrl, setExternalUrl] = useState("");
+  const [undo, setUndo] = useState<{ tickId: string; projectId: string } | null>(
+    null
   );
-  const [note, setNote] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+  const [hasLastPrefs, setHasLastPrefs] = useState(false);
 
   const activeProject = getProjectById(activeProjectId, projects);
   const isArchived = activeProject ? isProjectArchived(activeProject) : false;
+
+  const filteredTicks = useMemo(
+    () => filterTicks(ticks, filters),
+    [ticks, filters]
+  );
+
+  const filteredByProject = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(ticksByProject).map(([id, projectTicks]) => [
+        id,
+        filterTicks(projectTicks, filters),
+      ])
+    );
+  }, [ticksByProject, filters]);
 
   const syncProjects = useCallback((nextProjects: ReturnType<typeof loadProjects>) => {
     setProjects(nextProjects);
@@ -68,6 +130,33 @@ export function TimelineDashboard() {
     }
   }, [projects, activeProjectId]);
 
+  const handleExportWeek = useCallback(async () => {
+    if (!activeProject) return;
+    const summary = buildWeekSummary(ticks, activeProject.name);
+    try {
+      await navigator.clipboard.writeText(summary);
+      setExportStatus("copied week summary to clipboard");
+    } catch {
+      setExportStatus("copy failed — check browser permissions");
+    }
+    setTimeout(() => setExportStatus(null), 3000);
+  }, [activeProject, ticks]);
+
+  const handleUndo = useCallback(async () => {
+    if (!undo) return;
+    if (!isLocalTickId(undo.tickId)) {
+      setStatusMessage("cannot undo synced ticks");
+      setUndo(null);
+      return;
+    }
+    const removed = removeTick(undo.projectId, undo.tickId);
+    setUndo(null);
+    if (removed) {
+      setStatusMessage("undid last tick");
+      await refreshTicks();
+    }
+  }, [undo, refreshTicks]);
+
   useEffect(() => {
     const loadedProjects = loadProjects();
     const activeId = resolveActiveProjectId(
@@ -78,10 +167,24 @@ export function TimelineDashboard() {
       typeof window !== "undefined"
         ? (localStorage.getItem(VIEW_MODE_KEY) as "single" | "all" | null)
         : null;
+    const savedVisual =
+      typeof window !== "undefined"
+        ? parseStoredVisualMode(localStorage.getItem(VISUAL_MODE_KEY))
+        : "reveal";
+    let savedFilters = DEFAULT_FILTERS;
+    try {
+      const raw = localStorage.getItem(FILTERS_KEY);
+      if (raw) savedFilters = { ...DEFAULT_FILTERS, ...JSON.parse(raw) };
+    } catch {
+      /* ignore */
+    }
 
     setProjects(loadedProjects);
     setActiveProjectId(activeId);
     setViewMode(savedView === "all" ? "all" : "single");
+    setVisualMode(savedVisual);
+    setFilters(savedFilters);
+    setHasLastPrefs(Boolean(loadLastTickPrefs()));
     saveActiveProjectId(activeId);
   }, []);
 
@@ -101,30 +204,190 @@ export function TimelineDashboard() {
   }, [refreshTicks]);
 
   useEffect(() => {
-    if (!isAdding) return;
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 30_000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  useEffect(() => {
+    if (!isAdding || !activeProjectId) return;
+    saveDraft(activeProjectId, { ...draft, externalUrl });
+  }, [isAdding, activeProjectId, draft, externalUrl]);
+
+  useEffect(() => {
+    localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+  }, [filters]);
+
+  const openAddForm = useCallback(
+    (projectId?: string) => {
+      const id = projectId ?? activeProjectId;
+      if (projectId) {
+        setActiveProjectId(projectId);
+        saveActiveProjectId(projectId);
+      }
+      const saved = loadDraft(id) ?? emptyDraft();
+      setDraft(saved);
+      setExternalUrl(saved.externalUrl ?? "");
+      setIsAdding(true);
+      setStatusMessage(null);
+    },
+    [activeProjectId]
+  );
+
+  const closeAddForm = useCallback(() => {
+    if (activeProjectId) saveDraft(activeProjectId, { ...draft, externalUrl });
+    setIsAdding(false);
+    setStatusMessage(null);
+  }, [activeProjectId, draft, externalUrl]);
+
+  const cycleVisualMode = useCallback(() => {
+    setVisualMode((current) => {
+      const idx = VISUAL_CYCLE.indexOf(current);
+      const next = VISUAL_CYCLE[(idx + 1) % VISUAL_CYCLE.length];
+      localStorage.setItem(VISUAL_MODE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setIsAdding(false);
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inField =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        (e.target as HTMLElement)?.isContentEditable;
+
+      if (e.key === "Escape") {
+        if (isAdding) {
+          closeAddForm();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (inField) {
+        if ((e.metaKey || e.ctrlKey) && e.key === "z" && undo) {
+          void handleUndo();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      if (e.key === "n" && !isArchived) {
+        openAddForm();
+        e.preventDefault();
+      }
+      if (e.key === "l") {
+        cycleVisualMode();
+        e.preventDefault();
+      }
+      if (e.key === "e") {
+        void handleExportWeek();
+        e.preventDefault();
+      }
+      if (e.key === "z" && undo) {
+        void handleUndo();
+        e.preventDefault();
+      }
     }
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isAdding]);
-
-  const handleViewModeChange = (mode: "single" | "all") => {
-    setViewMode(mode);
-    localStorage.setItem(VIEW_MODE_KEY, mode);
-  };
+  }, [
+    isAdding,
+    isArchived,
+    undo,
+    closeAddForm,
+    openAddForm,
+    cycleVisualMode,
+    handleExportWeek,
+    handleUndo,
+  ]);
 
   const handleSourceChange = (next: TimelineSource) => {
-    setSource(next);
-    setEventType(defaultEventType(next));
+    setDraft((d) => ({
+      ...d,
+      source: next,
+      eventType: defaultEventType(next),
+    }));
+  };
+
+  const handleNotePaste = (text: string) => {
+    const applied = applyLinkToDraft(text, {
+      source: draft.source,
+      eventType: draft.eventType,
+      note: draft.note,
+    });
+    setDraft((d) => ({
+      ...d,
+      source: applied.source,
+      eventType: applied.eventType,
+      note: applied.note,
+    }));
+    if (applied.externalUrl) {
+      setExternalUrl(applied.externalUrl);
+      setStatusMessage("link parsed — source and type updated");
+    }
+  };
+
+  const handleNoteChange = (note: string) => {
+    setDraft((d) => ({ ...d, note }));
+    const parsed = parseTimelineLink(note);
+    if (parsed && !externalUrl) {
+      setExternalUrl(parsed.externalUrl);
+    }
+  };
+
+  const handleRepeatLast = () => {
+    const last = loadLastTickPrefs();
+    if (!last) return;
+    setDraft((d) => ({
+      ...d,
+      source: last.source,
+      eventType: last.eventType,
+    }));
+    setStatusMessage("filled from last tick");
   };
 
   const handleAdd = async () => {
     if (!activeProjectId || isArchived) return;
-    addTick(activeProjectId, { source, eventType, note });
-    setNote("");
+
+    let note = draft.note.trim();
+    let url = externalUrl.trim();
+    const parsed = parseTimelineLink(note);
+    if (parsed) {
+      url = parsed.externalUrl;
+      if (!note || note === url) note = parsed.note;
+    }
+
+    const tick = addTick(activeProjectId, {
+      source: draft.source,
+      eventType: draft.eventType,
+      note,
+      tags: draft.tags,
+      occurredAt: datetimeLocalToIso(draft.occurredAt),
+      externalUrl: url || undefined,
+    });
+
+    setDraft(emptyDraft());
+    setExternalUrl("");
+    clearDraft(activeProjectId);
+    setHasLastPrefs(true);
+    setUndo({ tickId: tick.id, projectId: activeProjectId });
+    setStatusMessage("tick added — press z to undo (30s)");
     await refreshTicks();
     setIsAdding(false);
+  };
+
+  const handleVisualModeChange = (mode: TimelineVisualMode) => {
+    setVisualMode(mode);
+    localStorage.setItem(VISUAL_MODE_KEY, mode);
+  };
+
+  const handleViewModeChange = (mode: "single" | "all") => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
   };
 
   const handleSelectProject = (projectId: string) => {
@@ -133,8 +396,11 @@ export function TimelineDashboard() {
   };
 
   const handleStartAdd = (projectId?: string) => {
-    if (projectId) handleSelectProject(projectId);
-    setIsAdding(true);
+    if (projectId) {
+      const p = getProjectById(projectId, projects);
+      if (p && isProjectArchived(p)) return;
+    }
+    openAddForm(projectId);
   };
 
   const handleCreateProject = async (name: string) => {
@@ -160,27 +426,57 @@ export function TimelineDashboard() {
     await refreshTicks();
   };
 
-  if (!activeProject) return null;
+  if (!activeProject) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-soft">
+        loading…
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full w-full font-mono text-sm">
-      <aside className="absolute left-6 top-1/2 z-10 -translate-y-1/2">
+      <aside className="absolute left-4 top-1/2 z-10 hidden -translate-y-1/2 sm:block lg:left-6">
         <SourceLegend />
       </aside>
 
-      <aside className="absolute right-6 top-1/2 z-10 w-56 -translate-y-1/2">
+      <aside className="absolute right-4 top-1/2 z-10 max-h-[calc(100dvh-8rem)] w-52 -translate-y-1/2 overflow-y-auto lg:right-6 lg:w-56">
         <div className="flex flex-col gap-8">
           {isAdding && !isArchived && (
             <AddTimelineEvent
-              source={source}
-              eventType={eventType}
-              note={note}
+              source={draft.source}
+              eventType={draft.eventType}
+              note={draft.note}
+              tags={draft.tags}
+              occurredAt={draft.occurredAt}
               onSourceChange={handleSourceChange}
-              onEventTypeChange={setEventType}
-              onNoteChange={setNote}
+              onEventTypeChange={(eventType) =>
+                setDraft((d) => ({ ...d, eventType }))
+              }
+              onNoteChange={handleNoteChange}
+              onTagsChange={(tags) => setDraft((d) => ({ ...d, tags }))}
+              onOccurredAtChange={(occurredAt) =>
+                setDraft((d) => ({ ...d, occurredAt }))
+              }
               onAdd={handleAdd}
-              onCancel={() => setIsAdding(false)}
+              onCancel={closeAddForm}
+              onRepeatLast={handleRepeatLast}
+              hasLastPrefs={hasLastPrefs}
+              statusMessage={statusMessage}
+              onNotePaste={handleNotePaste}
             />
+          )}
+
+          {undo && (
+            <div role="status" aria-live="polite" className="text-xs text-muted-soft">
+              <button
+                type="button"
+                onClick={() => void handleUndo()}
+                className="min-h-11 text-ink underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                undo last tick (z)
+              </button>
+            </div>
           )}
 
           <ProjectSwitcher
@@ -199,23 +495,30 @@ export function TimelineDashboard() {
       <div
         className={
           viewMode === "all"
-            ? "flex h-full w-full items-center justify-center overflow-y-auto px-36 py-6"
-            : "flex h-full w-full items-center justify-center overflow-hidden px-36"
+            ? "flex h-full w-full items-start justify-center overflow-y-auto px-4 pb-32 pt-8 sm:px-28 lg:px-36"
+            : "flex h-full w-full items-center justify-center overflow-hidden px-4 pb-32 pt-8 sm:px-28 lg:px-36"
         }
       >
         {viewMode === "all" ? (
           <AllTimelinesView
             projects={projects}
-            ticksByProject={ticksByProject}
+            ticksByProject={filteredByProject}
             activeProjectId={activeProjectId}
+            visualMode={visualMode}
             onSelectProject={handleSelectProject}
             onStartAdd={handleStartAdd}
           />
+        ) : visualMode === "list" ? (
+          <TimelineListView
+            ticks={filteredTicks}
+            projectName={activeProject.name}
+          />
         ) : (
-          <div className="flex max-w-xl flex-col items-center">
+          <div className="flex w-full max-w-[min(100%,56rem)] flex-col items-center">
             <AsciiTimeline
-              ticks={ticks}
+              ticks={filteredTicks}
               projectName={activeProject.name}
+              visualMode={visualMode}
               onStartAdd={() => handleStartAdd()}
               allowAdd={!isArchived}
               isActive
@@ -224,9 +527,23 @@ export function TimelineDashboard() {
             {isArchived && (
               <p className="mt-3 text-xs text-muted-soft">archived — view only</p>
             )}
+            {filteredTicks.length === 0 && ticks.length > 0 && (
+              <p className="mt-3 text-xs text-muted-soft" role="status">
+                no ticks match filters — open [ ··· ] in the dock below
+              </p>
+            )}
           </div>
         )}
       </div>
+
+      <TimelineDock
+        visualMode={visualMode}
+        filters={filters}
+        onVisualModeChange={handleVisualModeChange}
+        onFiltersChange={setFilters}
+        onExportWeek={() => void handleExportWeek()}
+        exportStatus={exportStatus}
+      />
     </div>
   );
 }

@@ -1,11 +1,20 @@
 import type { TimelineTick } from "@/lib/timeline/event-catalog";
-import { getEventTypeLabel, getSourceColor } from "@/lib/timeline/event-catalog";
+import {
+  getEventTypeLabel,
+  getSourceColor,
+  getSourcePrefix,
+  tickAriaLabel,
+} from "@/lib/timeline/event-catalog";
 
 export type AsciiTick = {
   id: string;
-  char: "|";
+  /** Compact bar character. */
+  bar: "|";
+  /** Source letter for expanded / letters mode. */
+  letter: string;
   color: string;
   title: string;
+  ariaLabel: string;
 };
 
 function formatWhen(iso: string) {
@@ -25,14 +34,17 @@ export function ticksToAsciiLine(ticks: TimelineTick[]): AsciiTick[] {
 
   return sorted.map((tick) => ({
     id: tick.id,
-    char: "|",
+    bar: "|",
+    letter: getSourcePrefix(tick.source),
     color: getSourceColor(tick.source),
     title: [
       getEventTypeLabel(tick.source, tick.eventType),
       formatWhen(tick.occurredAt),
       tick.note,
+      tick.tags?.length ? `#${tick.tags.join(" #")}` : undefined,
     ]
       .filter(Boolean)
       .join(" · "),
+    ariaLabel: tickAriaLabel(tick),
   }));
 }

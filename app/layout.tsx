@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Inter, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  variable: "--font-cormorant",
-  weight: ["400", "500"],
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
 
 const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
@@ -20,8 +9,7 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "ProgressGoat",
-  description:
-    "Project intelligence dashboard for timelines, living docs, and project memory.",
+  description: "ASCII project timeline dashboard.",
 };
 
 export default function RootLayout({
@@ -31,9 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${cormorant.variable} ${inter.variable} ${jetbrains.variable} antialiased`}
-      >
+      <body className={`${jetbrains.variable} font-mono antialiased`}>
         {children}
       </body>
     </html>

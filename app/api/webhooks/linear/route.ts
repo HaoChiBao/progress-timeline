@@ -6,6 +6,8 @@ import {
 import { appendServerTick } from "@/lib/timeline/server-tick-store";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   const secret = process.env.LINEAR_WEBHOOK_SECRET;
   const projectId =

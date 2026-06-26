@@ -1,6 +1,9 @@
 "use client";
 
-import { TIMELINE_SOURCE_LIST } from "@/lib/timeline/event-catalog";
+import {
+  SOURCE_PREFIX,
+  TIMELINE_SOURCE_LIST,
+} from "@/lib/timeline/event-catalog";
 
 export function SourceLegend() {
   return (
@@ -12,10 +15,14 @@ export function SourceLegend() {
       <ul className="space-y-2">
         {TIMELINE_SOURCE_LIST.map((src) => (
           <li key={src.id} className="flex items-center gap-1.5">
-            <span style={{ color: src.color }} className="text-base leading-none">
-              |
+            <span
+              style={{ color: src.color }}
+              className="inline-flex h-5 w-5 items-center justify-center text-sm font-bold leading-none"
+              aria-hidden
+            >
+              {SOURCE_PREFIX[src.id]}
             </span>
-            <span>{src.label}</span>
+            <span className="text-muted-soft">{src.label}</span>
           </li>
         ))}
       </ul>

@@ -42,7 +42,7 @@ export function AsciiDropdown<T extends string>({
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between border border-hairline px-2 py-1 text-left text-ink hover:bg-surface-soft"
+        className="flex w-full items-center justify-between border border-hairline px-2 py-2 text-left text-ink hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink min-h-11"
       >
         <span>{selected?.label ?? value}</span>
         <span className="text-muted-soft">{open ? "^" : "v"}</span>
@@ -62,7 +62,7 @@ export function AsciiDropdown<T extends string>({
                   setOpen(false);
                 }}
                 className={cn(
-                  "block w-full px-2 py-1 text-left hover:bg-surface-soft",
+                  "block w-full px-2 py-2 text-left min-h-11 hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink",
                   option.value === value ? "text-ink" : "text-muted-text"
                 )}
               >
