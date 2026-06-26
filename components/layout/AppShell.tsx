@@ -1,15 +1,15 @@
-import { Sidebar } from "@/components/layout/Sidebar";
+import { FloatingSideNav } from "@/components/layout/FloatingSideNav";
 
 type AppShellProps = {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   projectId?: string;
 };
 
 export function AppShell({ children, projectId }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-canvas">
-      <Sidebar projectId={projectId} />
-      <main className="flex min-h-screen flex-1 flex-col">{children}</main>
+    <div className="relative min-h-screen bg-canvas">
+      <FloatingSideNav projectId={projectId} />
+      <main className="min-h-screen pl-24 pr-8">{children}</main>
     </div>
   );
 }

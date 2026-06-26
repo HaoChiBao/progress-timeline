@@ -8,6 +8,8 @@ export type ProjectEvent = {
   source: EventSource;
   eventType: string;
   occurredAt: string;
+  /** When the event ended; if omitted, duration runs until the next event. */
+  endedAt?: string;
   createdAt: string;
   actorName?: string;
   metadata?: Record<string, unknown>;
