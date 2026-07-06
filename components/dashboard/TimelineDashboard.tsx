@@ -1,6 +1,5 @@
 "use client";
 
-import { AddTimelineEvent } from "@/components/dashboard/AddTimelineEvent";
 import { AllTimelinesView } from "@/components/dashboard/AllTimelinesView";
 import { AsciiTimeline } from "@/components/dashboard/AsciiTimeline";
 import {
@@ -8,13 +7,12 @@ import {
   TimelineDock,
   type TimelineVisualMode,
 } from "@/components/dashboard/TimelineDock";
-import { ProjectSwitcher } from "@/components/dashboard/ProjectSwitcher";
-import { SourceLegend } from "@/components/dashboard/SourceLegend";
+import { SourcesStrip } from "@/components/dashboard/SourcesStrip";
+import { TimelineLeftPanel } from "@/components/dashboard/TimelineLeftPanel";
 import { TimelineListView } from "@/components/dashboard/TimelineListView";
 import {
-  type TimelineSource,
   defaultEventType,
-} from "@/lib/timeline/event-catalog";
+} from "@/lib/timeline/source-registry";
 import { applyLinkToDraft, parseTimelineLink } from "@/lib/timeline/link-parser";
 import {
   archiveProject,
@@ -91,6 +89,12 @@ export function TimelineDashboard() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [hasLastPrefs, setHasLastPrefs] = useState(false);
+  const [selectedTickId, setSelectedTickId] = useState<string | null>(null);
+  const [selectedTickProjectId, setSelectedTickProjectId] = useState<
+    string | null
+  >(null);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [sourcesRefreshKey, setSourcesRefreshKey] = useState(0);
 
   const activeProject = getProjectById(activeProjectId, projects);
   const isArchived = activeProject ? isProjectArchived(activeProject) : false;
@@ -98,6 +102,46 @@ export function TimelineDashboard() {
   const filteredTicks = useMemo(
     () => filterTicks(ticks, filters),
     [ticks, filters]
+  );
+
+  const selectedTick = useMemo(() => {
+    if (!selectedTickId || !selectedTickProjectId) return null;
+    const projectTicks =
+      ticksByProject[selectedTickProjectId] ??
+      (selectedTickProjectId === activeProjectId ? ticks : []);
+    return projectTicks.find((t) => t.id === selectedTickId) ?? null;
+  }, [
+    selectedTickId,
+    selectedTickProjectId,
+    ticksByProject,
+    activeProjectId,
+    ticks,
+  ]);
+
+  const selectedProjectName = useMemo(() => {
+    if (!selectedTickProjectId) return activeProject?.name ?? "";
+    return getProjectById(selectedTickProjectId, projects)?.name ?? "";
+  }, [selectedTickProjectId, projects, activeProject]);
+
+  const handleCloseTickDetail = useCallback(() => {
+    setSelectedTickId(null);
+    setSelectedTickProjectId(null);
+  }, []);
+
+  const handleSelectTick = useCallback(
+    (projectId: string, tickId: string) => {
+      if (
+        selectedTickId === tickId &&
+        selectedTickProjectId === projectId
+      ) {
+        handleCloseTickDetail();
+        return;
+      }
+      setIsAdding(false);
+      setSelectedTickProjectId(projectId);
+      setSelectedTickId(tickId);
+    },
+    [selectedTickId, selectedTickProjectId, handleCloseTickDetail]
   );
 
   const filteredByProject = useMemo(() => {
@@ -220,6 +264,8 @@ export function TimelineDashboard() {
 
   const openAddForm = useCallback(
     (projectId?: string) => {
+      handleCloseTickDetail();
+      setIsAddingSource(false);
       const id = projectId ?? activeProjectId;
       if (projectId) {
         setActiveProjectId(projectId);
@@ -231,7 +277,7 @@ export function TimelineDashboard() {
       setIsAdding(true);
       setStatusMessage(null);
     },
-    [activeProjectId]
+    [activeProjectId, handleCloseTickDetail]
   );
 
   const closeAddForm = useCallback(() => {
@@ -259,7 +305,13 @@ export function TimelineDashboard() {
         (e.target as HTMLElement)?.isContentEditable;
 
       if (e.key === "Escape") {
-        if (isAdding) {
+        if (isAddingSource) {
+          setIsAddingSource(false);
+          e.preventDefault();
+        } else if (selectedTick) {
+          handleCloseTickDetail();
+          e.preventDefault();
+        } else if (isAdding) {
           closeAddForm();
           e.preventDefault();
         }
@@ -296,16 +348,34 @@ export function TimelineDashboard() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     isAdding,
+    isAddingSource,
     isArchived,
     undo,
+    selectedTick,
     closeAddForm,
     openAddForm,
     cycleVisualMode,
     handleExportWeek,
     handleUndo,
+    handleCloseTickDetail,
   ]);
 
-  const handleSourceChange = (next: TimelineSource) => {
+  const openAddSourceForm = useCallback(() => {
+    handleCloseTickDetail();
+    setIsAdding(false);
+    setIsAddingSource(true);
+  }, [handleCloseTickDetail]);
+
+  const closeAddSourceForm = useCallback(() => {
+    setIsAddingSource(false);
+  }, []);
+
+  const handleSourceAdded = useCallback(() => {
+    setSourcesRefreshKey((k) => k + 1);
+    setIsAddingSource(false);
+  }, []);
+
+  const handleSourceChange = (next: string) => {
     setDraft((d) => ({
       ...d,
       source: next,
@@ -388,11 +458,13 @@ export function TimelineDashboard() {
   const handleViewModeChange = (mode: "single" | "all") => {
     setViewMode(mode);
     localStorage.setItem(VIEW_MODE_KEY, mode);
+    handleCloseTickDetail();
   };
 
   const handleSelectProject = (projectId: string) => {
     setActiveProjectId(projectId);
     saveActiveProjectId(projectId);
+    handleCloseTickDetail();
   };
 
   const handleStartAdd = (projectId?: string) => {
@@ -436,67 +508,56 @@ export function TimelineDashboard() {
 
   return (
     <div className="relative h-full w-full font-mono text-sm">
-      <aside className="absolute left-4 top-1/2 z-10 hidden -translate-y-1/2 sm:block lg:left-6">
-        <SourceLegend />
-      </aside>
+      <TimelineLeftPanel
+        projects={projects}
+        activeProjectId={activeProjectId}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        onSelectProject={handleSelectProject}
+        onCreateProject={handleCreateProject}
+        onArchive={handleArchive}
+        onRestore={handleRestore}
+        selectedTick={selectedTick}
+        selectedProjectName={selectedProjectName}
+        onCloseTick={handleCloseTickDetail}
+        isAdding={isAdding}
+        isAddingSource={isAddingSource}
+        isArchived={isArchived}
+        draft={draft}
+        sourcesRefreshKey={sourcesRefreshKey}
+        onSourceChange={handleSourceChange}
+        onEventTypeChange={(eventType) =>
+          setDraft((d) => ({ ...d, eventType }))
+        }
+        onNoteChange={handleNoteChange}
+        onTagsChange={(tags) => setDraft((d) => ({ ...d, tags }))}
+        onOccurredAtChange={(occurredAt) =>
+          setDraft((d) => ({ ...d, occurredAt }))
+        }
+        onAdd={handleAdd}
+        onCancelAdd={closeAddForm}
+        onCancelAddSource={closeAddSourceForm}
+        onSourceAdded={handleSourceAdded}
+        onRepeatLast={handleRepeatLast}
+        hasLastPrefs={hasLastPrefs}
+        statusMessage={statusMessage}
+        onNotePaste={handleNotePaste}
+        undo={undo}
+        onUndo={() => void handleUndo()}
+      />
 
-      <aside className="absolute right-4 top-1/2 z-10 max-h-[calc(100dvh-8rem)] w-52 -translate-y-1/2 overflow-y-auto lg:right-6 lg:w-56">
-        <div className="flex flex-col gap-8">
-          {isAdding && !isArchived && (
-            <AddTimelineEvent
-              source={draft.source}
-              eventType={draft.eventType}
-              note={draft.note}
-              tags={draft.tags}
-              occurredAt={draft.occurredAt}
-              onSourceChange={handleSourceChange}
-              onEventTypeChange={(eventType) =>
-                setDraft((d) => ({ ...d, eventType }))
-              }
-              onNoteChange={handleNoteChange}
-              onTagsChange={(tags) => setDraft((d) => ({ ...d, tags }))}
-              onOccurredAtChange={(occurredAt) =>
-                setDraft((d) => ({ ...d, occurredAt }))
-              }
-              onAdd={handleAdd}
-              onCancel={closeAddForm}
-              onRepeatLast={handleRepeatLast}
-              hasLastPrefs={hasLastPrefs}
-              statusMessage={statusMessage}
-              onNotePaste={handleNotePaste}
-            />
-          )}
-
-          {undo && (
-            <div role="status" aria-live="polite" className="text-xs text-muted-soft">
-              <button
-                type="button"
-                onClick={() => void handleUndo()}
-                className="min-h-11 text-ink underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-              >
-                undo last tick (z)
-              </button>
-            </div>
-          )}
-
-          <ProjectSwitcher
-            projects={projects}
-            activeProjectId={activeProjectId}
-            viewMode={viewMode}
-            onViewModeChange={handleViewModeChange}
-            onSelect={handleSelectProject}
-            onCreate={handleCreateProject}
-            onArchive={handleArchive}
-            onRestore={handleRestore}
-          />
-        </div>
+      <aside className="fixed bottom-24 left-4 z-10 sm:block lg:left-6">
+        <SourcesStrip
+          refreshKey={sourcesRefreshKey}
+          onAddSource={openAddSourceForm}
+        />
       </aside>
 
       <div
         className={
           viewMode === "all"
-            ? "flex h-full w-full items-start justify-center overflow-y-auto px-4 pb-32 pt-8 sm:px-28 lg:px-36"
-            : "flex h-full w-full items-center justify-center overflow-hidden px-4 pb-32 pt-8 sm:px-28 lg:px-36"
+            ? "flex h-full w-full items-start justify-center overflow-y-auto px-4 pb-32 pt-8 sm:pl-[calc(13rem+1.5rem)] sm:pr-[calc(13rem+1.5rem)] lg:pl-[calc(14rem+1.5rem)] lg:pr-[calc(14rem+1.5rem)]"
+            : "flex h-full w-full items-center justify-center overflow-hidden px-4 pb-32 pt-8 sm:pl-[calc(13rem+1.5rem)] sm:pr-[calc(13rem+1.5rem)] lg:pl-[calc(14rem+1.5rem)] lg:pr-[calc(14rem+1.5rem)]"
         }
       >
         {viewMode === "all" ? (
@@ -505,24 +566,35 @@ export function TimelineDashboard() {
             ticksByProject={filteredByProject}
             activeProjectId={activeProjectId}
             visualMode={visualMode}
+            selectedTickId={selectedTickId}
             onSelectProject={handleSelectProject}
             onStartAdd={handleStartAdd}
+            onSelectTick={handleSelectTick}
           />
         ) : visualMode === "list" ? (
           <TimelineListView
             ticks={filteredTicks}
             projectName={activeProject.name}
+            selectedTickId={selectedTickId}
+            onSelectTick={(tickId) =>
+              handleSelectTick(activeProjectId, tickId)
+            }
           />
         ) : (
-          <div className="flex w-full max-w-[min(100%,56rem)] flex-col items-center">
+          <div className="flex w-full max-w-[min(100%,56rem)] flex-col items-center mx-auto">
             <AsciiTimeline
               ticks={filteredTicks}
               projectName={activeProject.name}
               visualMode={visualMode}
               onStartAdd={() => handleStartAdd()}
+              selectedTickId={selectedTickId}
+              onSelectTick={(tickId) =>
+                handleSelectTick(activeProjectId, tickId)
+              }
               allowAdd={!isArchived}
               isActive
               centered
+              hideProjectHeader
             />
             {isArchived && (
               <p className="mt-3 text-xs text-muted-soft">archived — view only</p>

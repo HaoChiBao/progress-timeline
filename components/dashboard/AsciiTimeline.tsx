@@ -7,6 +7,8 @@ import {
   getTimelineSpan,
 } from "@/lib/timeline/timeline-span";
 import type { TimelineVisualMode } from "@/components/dashboard/TimelineDock";
+import { TimelineAddButton } from "@/components/dashboard/TimelineAddButton";
+import { TimelineRail } from "@/components/dashboard/TimelineRail";
 import { cn } from "@/lib/utils";
 import { useCallback, useMemo, useRef, useState } from "react";
 
@@ -15,10 +17,13 @@ type AsciiTimelineProps = {
   projectName: string;
   visualMode: TimelineVisualMode;
   onStartAdd: () => void;
+  selectedTickId?: string | null;
+  onSelectTick?: (tickId: string) => void;
   allowAdd?: boolean;
   isActive?: boolean;
   onSelect?: () => void;
   centered?: boolean;
+  hideProjectHeader?: boolean;
 };
 
 export function AsciiTimeline({
@@ -26,10 +31,13 @@ export function AsciiTimeline({
   projectName,
   visualMode,
   onStartAdd,
+  selectedTickId = null,
+  onSelectTick,
   allowAdd = true,
   isActive = false,
   onSelect,
   centered = false,
+  hideProjectHeader = false,
 }: AsciiTimelineProps) {
   const line = useMemo(() => ticksToAsciiLine(ticks), [ticks]);
   const span = useMemo(() => getTimelineSpan(ticks), [ticks]);
@@ -65,26 +73,25 @@ export function AsciiTimeline({
     [line]
   );
 
-  const handleRailPointerMove = useCallback(
+  const handleStagePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (clearHoverRef.current) {
         clearTimeout(clearHoverRef.current);
         clearHoverRef.current = null;
       }
-      const id = pickTickAt(e.clientX);
-      setActiveId(id);
+      setActiveId(pickTickAt(e.clientX));
     },
     [pickTickAt]
   );
 
-  const handleRailPointerLeave = useCallback(() => {
+  const handleStagePointerLeave = useCallback(() => {
     clearHoverRef.current = setTimeout(() => {
       setActiveId(null);
       setRailHovered(false);
     }, 80);
   }, []);
 
-  const handleRailPointerEnter = useCallback(() => {
+  const handleStagePointerEnter = useCallback(() => {
     if (clearHoverRef.current) {
       clearTimeout(clearHoverRef.current);
       clearHoverRef.current = null;
@@ -104,111 +111,65 @@ export function AsciiTimeline({
       )}
       aria-label={`${projectName} timeline`}
     >
-      <button
-        type="button"
-        onClick={onSelect}
-        className={cn(
-          "mb-2 min-h-9 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
-          centered ? "text-center" : "text-left",
-          isActive ? "text-ink" : "text-muted-text"
-        )}
-      >
-        {isActive ? "> " : "  "}
-        {projectName}
-      </button>
+      {!hideProjectHeader && (
+        <>
+          <button
+            type="button"
+            onClick={onSelect}
+            className={cn(
+              "mb-2 min-h-9 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink",
+              centered ? "text-center" : "text-left",
+              isActive ? "text-ink" : "text-muted-text"
+            )}
+          >
+            {isActive ? "> " : "  "}
+            {projectName}
+          </button>
 
-      {span && (
-        <p
-          className={cn(
-            "mb-3 text-xs text-muted-soft",
-            centered && "text-center"
+          {span && (
+            <p
+              className={cn(
+                "mb-3 text-xs text-muted-soft",
+                centered && "text-center"
+              )}
+              role="status"
+            >
+              {formatSpanLabel(span)}
+            </p>
           )}
-          role="status"
-        >
-          {formatSpanLabel(span)}
-        </p>
+        </>
       )}
 
       <div
         className={cn(
-          "timeline-scroll relative w-full overflow-x-auto pb-2",
+          "timeline-stage relative w-full",
           centered ? "max-w-[min(100%,56rem)]" : "max-w-full"
         )}
-        onPointerEnter={handleRailPointerEnter}
-        onPointerMove={handleRailPointerMove}
-        onPointerLeave={handleRailPointerLeave}
+        onPointerEnter={handleStagePointerEnter}
+        onPointerMove={handleStagePointerMove}
+        onPointerLeave={handleStagePointerLeave}
       >
-        <div
-          className={cn(
-            "flex min-w-min flex-nowrap items-end gap-0 px-1",
-            centered && "justify-center"
-          )}
-          role="list"
-          aria-label={`${ticks.length} events, oldest to newest left to right`}
-        >
-          {line.length === 0 ? (
-            <span className="px-2 py-4 text-muted-soft" aria-hidden>
-              ·
-            </span>
-          ) : (
-            line.map((tick) => {
-              const isActiveTick = activeId === tick.id;
-              const expanded =
-                showLettersAlways || (visualMode === "reveal" && isActiveTick);
-              const glyph = expanded ? tick.letter : tick.bar;
+        <TimelineRail
+          line={line}
+          visualMode={visualMode}
+          showBars={showBars}
+          showLettersAlways={showLettersAlways}
+          activeId={activeId}
+          selectedTickId={selectedTickId}
+          onActiveChange={setActiveId}
+          onTickSelect={(id) => onSelectTick?.(id)}
+          tickRefs={tickRefs}
+          centered={centered}
+          eventCount={ticks.length}
+        />
 
-              return (
-                <div
-                  key={tick.id}
-                  className="relative flex flex-col items-center self-end"
-                >
-                  {isActiveTick && (
-                    <div
-                      className="timeline-tick-tooltip pointer-events-none absolute bottom-full z-10 mb-2 max-w-48 whitespace-nowrap rounded border border-hairline bg-canvas px-2 py-1 text-[10px] text-muted-text shadow-subtle"
-                      role="tooltip"
-                    >
-                      {tick.title}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    role="listitem"
-                    ref={(el) => {
-                      if (el) tickRefs.current.set(tick.id, el);
-                      else tickRefs.current.delete(tick.id);
-                    }}
-                    style={{ color: tick.color }}
-                    title={tick.title}
-                    aria-label={tick.ariaLabel}
-                    onFocus={() => setActiveId(tick.id)}
-                    onBlur={() => setActiveId(null)}
-                    className={cn(
-                      "timeline-tick flex items-end justify-center font-bold leading-none",
-                      showBars && !expanded && "timeline-tick--bar",
-                      expanded && "timeline-tick--expanded",
-                      isActiveTick && "timeline-tick--active"
-                    )}
-                  >
-                    {glyph}
-                  </button>
-                </div>
-              );
-            })
-          )}
-
-          {allowAdd && (railHovered || line.length === 0) && (
-            <div className="relative ml-1 flex flex-col items-center self-end">
-              <button
-                type="button"
-                onClick={onStartAdd}
-                className="timeline-tick timeline-tick--add flex items-end justify-center px-1 text-muted-soft hover:text-ink focus-visible:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-                aria-label={`Add tick to ${projectName}`}
-              >
-                [+]
-              </button>
-            </div>
-          )}
-        </div>
+        {allowAdd && (
+          <TimelineAddButton
+            projectName={projectName}
+            railHovered={railHovered}
+            onStartAdd={onStartAdd}
+          />
+        )}
       </div>
 
       {line.length > 0 && visualMode === "reveal" && (

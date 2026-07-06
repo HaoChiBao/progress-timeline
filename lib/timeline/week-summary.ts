@@ -1,8 +1,9 @@
+import type { TimelineTick } from "@/lib/timeline/event-catalog";
 import {
   getEventTypeLabel,
-  TIMELINE_SOURCES,
-  type TimelineTick,
-} from "@/lib/timeline/event-catalog";
+  listAllSources,
+  resolveSource,
+} from "@/lib/timeline/source-registry";
 
 function formatDay(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -30,7 +31,7 @@ export function buildWeekSummary(
   }
 
   const bySource = Object.fromEntries(
-    Object.keys(TIMELINE_SOURCES).map((s) => [s, 0])
+    listAllSources().map((s) => [s.id, 0])
   ) as Record<string, number>;
   for (const tick of recent) {
     bySource[tick.source] = (bySource[tick.source] ?? 0) + 1;
@@ -38,7 +39,7 @@ export function buildWeekSummary(
 
   const sourceLine = Object.entries(bySource)
     .filter(([, n]) => n > 0)
-    .map(([s, n]) => `${TIMELINE_SOURCES[s as keyof typeof TIMELINE_SOURCES].label}: ${n}`)
+    .map(([s, n]) => `${resolveSource(s).label}: ${n}`)
     .join(" · ");
 
   const lines = recent.map((tick) => {

@@ -5,10 +5,7 @@ import {
   type TimelineFilterState,
   type TimeRange,
 } from "@/lib/timeline/tick-filters";
-import {
-  TIMELINE_SOURCE_LIST,
-  type TimelineSource,
-} from "@/lib/timeline/event-catalog";
+import { listAllSources } from "@/lib/timeline/source-registry";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -133,15 +130,13 @@ export function TimelineDock({
               <select
                 id="dock-filter-source"
                 value={filters.source}
-                onChange={(e) =>
-                  setFilter("source", e.target.value as TimelineSource | "all")
-                }
+                onChange={(e) => setFilter("source", e.target.value)}
                 className="min-h-9 rounded-sm border border-hairline bg-transparent px-2 py-1 text-ink focus:border-ink focus:outline-none"
               >
                 <option value="all">all</option>
-                {TIMELINE_SOURCE_LIST.map((src) => (
+                {listAllSources().map((src) => (
                   <option key={src.id} value={src.id}>
-                    {src.label}
+                    {src.builtIn ? src.label : `${src.character} ${src.label}`}
                   </option>
                 ))}
               </select>

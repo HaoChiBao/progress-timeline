@@ -14,8 +14,10 @@ type AllTimelinesViewProps = {
   ticksByProject: Record<string, TimelineTick[]>;
   activeProjectId: string;
   visualMode: TimelineVisualMode;
+  selectedTickId: string | null;
   onSelectProject: (projectId: string) => void;
   onStartAdd: (projectId: string) => void;
+  onSelectTick: (projectId: string, tickId: string) => void;
 };
 
 export function AllTimelinesView({
@@ -23,14 +25,16 @@ export function AllTimelinesView({
   ticksByProject,
   activeProjectId,
   visualMode,
+  selectedTickId,
   onSelectProject,
   onStartAdd,
+  onSelectTick,
 }: AllTimelinesViewProps) {
   const activeProjects = getActiveProjects(projects);
   const archivedProjects = getArchivedProjects(projects);
 
   return (
-    <div className="flex w-full max-w-[min(100%,56rem)] flex-col items-center gap-12">
+    <div className="mx-auto flex w-full max-w-[min(100%,56rem)] flex-col items-center gap-12">
       {activeProjects.map((project) => (
         <AsciiTimeline
           key={project.id}
@@ -41,6 +45,8 @@ export function AllTimelinesView({
             onSelectProject(project.id);
             onStartAdd(project.id);
           }}
+          selectedTickId={selectedTickId}
+          onSelectTick={(tickId) => onSelectTick(project.id, tickId)}
           allowAdd
           centered
           isActive={project.id === activeProjectId}
@@ -59,6 +65,8 @@ export function AllTimelinesView({
                 projectName={project.name}
                 visualMode={visualMode}
                 onStartAdd={() => onSelectProject(project.id)}
+                selectedTickId={selectedTickId}
+                onSelectTick={(tickId) => onSelectTick(project.id, tickId)}
                 allowAdd={false}
                 centered
                 isActive={project.id === activeProjectId}

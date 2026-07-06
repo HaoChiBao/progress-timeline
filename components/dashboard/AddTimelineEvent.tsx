@@ -2,19 +2,19 @@
 
 import { AsciiDropdown } from "@/components/dashboard/AsciiDropdown";
 import {
-  TIMELINE_SOURCES,
-  type TimelineSource,
-} from "@/lib/timeline/event-catalog";
+  defaultEventType,
+  listAllSources,
+} from "@/lib/timeline/source-registry";
 import { suggestSmartTags } from "@/lib/timeline/tick-tags";
 import { useMemo } from "react";
 
 type AddTimelineEventProps = {
-  source: TimelineSource;
+  source: string;
   eventType: string;
   note: string;
   tags: string;
   occurredAt: string;
-  onSourceChange: (source: TimelineSource) => void;
+  onSourceChange: (source: string) => void;
   onEventTypeChange: (eventType: string) => void;
   onNoteChange: (note: string) => void;
   onTagsChange: (tags: string) => void;
@@ -25,6 +25,8 @@ type AddTimelineEventProps = {
   hasLastPrefs?: boolean;
   statusMessage?: string | null;
   onNotePaste?: (text: string) => void;
+  /** Re-read custom sources after add/remove. */
+  sourcesRefreshKey?: number;
 };
 
 export function AddTimelineEvent({
@@ -44,15 +46,19 @@ export function AddTimelineEvent({
   hasLastPrefs,
   statusMessage,
   onNotePaste,
+  sourcesRefreshKey = 0,
 }: AddTimelineEventProps) {
-  const sourceOptions = (Object.keys(TIMELINE_SOURCES) as TimelineSource[]).map(
-    (key) => ({
-      value: key,
-      label: TIMELINE_SOURCES[key].label,
-    })
-  );
+  const allSources = listAllSources();
+  // sourcesRefreshKey forces re-read after custom source add/remove
+  void sourcesRefreshKey;
 
-  const typeOptions = TIMELINE_SOURCES[source].types.map((t) => ({
+  const sourceOptions = allSources.map((s) => ({
+    value: s.id,
+    label: s.builtIn ? s.label : `${s.character} ${s.label}`,
+  }));
+
+  const current = allSources.find((s) => s.id === source) ?? allSources[0];
+  const typeOptions = (current?.types ?? []).map((t) => ({
     value: t.id,
     label: t.label,
   }));
@@ -82,7 +88,10 @@ export function AddTimelineEvent({
           label="source"
           value={source}
           options={sourceOptions}
-          onChange={onSourceChange}
+          onChange={(id) => {
+            onSourceChange(id);
+            onEventTypeChange(defaultEventType(id));
+          }}
         />
 
         <AsciiDropdown

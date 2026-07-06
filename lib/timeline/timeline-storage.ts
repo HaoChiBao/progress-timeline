@@ -1,5 +1,5 @@
 import type { TimelineProject } from "@/lib/timeline/project-storage";
-import type { TimelineSource, TimelineTick } from "@/lib/timeline/event-catalog";
+import type { TimelineTick } from "@/lib/timeline/event-catalog";
 import { mergeTags } from "@/lib/timeline/tick-tags";
 
 const STORAGE_PREFIX = "pg-timeline-ticks";
@@ -7,7 +7,7 @@ const DRAFT_PREFIX = "pg-timeline-draft";
 const LAST_PREFS_KEY = "pg-timeline-last-prefs";
 
 export type TickDraft = {
-  source: TimelineSource;
+  source: string;
   eventType: string;
   note: string;
   tags: string;
@@ -16,7 +16,7 @@ export type TickDraft = {
 };
 
 export type LastTickPrefs = {
-  source: TimelineSource;
+  source: string;
   eventType: string;
 };
 
@@ -109,7 +109,7 @@ export function saveTicks(projectId: string, ticks: TimelineTick[]) {
 }
 
 export type CreateTickInput = {
-  source: TimelineSource;
+  source: string;
   eventType: string;
   note?: string;
   tags?: string;

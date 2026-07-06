@@ -1,10 +1,10 @@
-import type { TimelineSource, TimelineTick } from "@/lib/timeline/event-catalog";
+import type { TimelineTick } from "@/lib/timeline/event-catalog";
 
 export type TimeRange = "all" | "today" | "week";
 
 export type TimelineFilterState = {
   timeRange: TimeRange;
-  source: TimelineSource | "all";
+  source: string | "all";
   tag: string;
   /** Hide low-signal updates like ticket_updated. */
   hideMinor: boolean;

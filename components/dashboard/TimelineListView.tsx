@@ -6,12 +6,14 @@ import {
   getSourceColor,
   getSourcePrefix,
   tickAriaLabel,
-} from "@/lib/timeline/event-catalog";
+} from "@/lib/timeline/source-registry";
 import { cn } from "@/lib/utils";
 
 type TimelineListViewProps = {
   ticks: TimelineTick[];
   projectName: string;
+  selectedTickId?: string | null;
+  onSelectTick?: (tickId: string) => void;
   className?: string;
 };
 
@@ -28,6 +30,8 @@ function formatWhen(iso: string) {
 export function TimelineListView({
   ticks,
   projectName,
+  selectedTickId = null,
+  onSelectTick,
   className,
 }: TimelineListViewProps) {
   const sorted = [...ticks].sort(
@@ -52,8 +56,20 @@ export function TimelineListView({
         <li
           key={tick.id}
           tabIndex={0}
-          className="rounded-sm border border-transparent px-2 py-2 outline-none focus-visible:border-ink focus-visible:ring-1 focus-visible:ring-ink"
+          role="button"
+          onClick={() => onSelectTick?.(tick.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSelectTick?.(tick.id);
+            }
+          }}
+          className={cn(
+            "cursor-pointer rounded-sm border border-transparent px-2 py-2 outline-none hover:bg-surface-soft/60 focus-visible:border-ink focus-visible:ring-1 focus-visible:ring-ink",
+            selectedTickId === tick.id && "border-ink bg-surface-soft/40"
+          )}
           aria-label={tickAriaLabel(tick)}
+          aria-pressed={selectedTickId === tick.id}
         >
           <div className="flex items-start gap-2">
             <span

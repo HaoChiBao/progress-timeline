@@ -1,10 +1,7 @@
-import {
-  defaultEventType,
-  type TimelineSource,
-} from "@/lib/timeline/event-catalog";
+import { defaultEventType } from "@/lib/timeline/source-registry";
 
 export type ParsedTimelineLink = {
-  source: TimelineSource;
+  source: string;
   eventType: string;
   note: string;
   externalUrl: string;
@@ -90,9 +87,9 @@ export function parseTimelineLink(input: string): ParsedTimelineLink | null {
 /** Apply parsed link fields when user pastes a URL into the note field. */
 export function applyLinkToDraft(
   text: string,
-  current: { source: TimelineSource; eventType: string; note: string }
+  current: { source: string; eventType: string; note: string }
 ): {
-  source: TimelineSource;
+  source: string;
   eventType: string;
   note: string;
   externalUrl?: string;
@@ -108,6 +105,6 @@ export function applyLinkToDraft(
   };
 }
 
-export function defaultLinkEventType(source: TimelineSource): string {
+export function defaultLinkEventType(source: string): string {
   return defaultEventType(source);
 }

@@ -4,7 +4,7 @@ import {
   getSourceColor,
   getSourcePrefix,
   tickAriaLabel,
-} from "@/lib/timeline/event-catalog";
+} from "@/lib/timeline/source-registry";
 
 export type AsciiTick = {
   id: string;

@@ -9,7 +9,8 @@ export type TimelineSource =
 export type TimelineTick = {
   id: string;
   projectId: string;
-  source: TimelineSource;
+  /** Built-in id (github, linear…) or custom_* user source. */
+  source: string;
   /** Subcategory id from the event catalog, e.g. `github.push`. */
   eventType: string;
   /** Optional short note when adding manually. */
@@ -115,9 +116,15 @@ export function getSourcePrefix(source: TimelineSource): string {
 }
 
 export function tickAriaLabel(tick: TimelineTick): string {
+  const meta =
+    tick.source in TIMELINE_SOURCES
+      ? TIMELINE_SOURCES[tick.source as TimelineSource]
+      : null;
   const parts = [
-    TIMELINE_SOURCES[tick.source].label,
-    getEventTypeLabel(tick.source, tick.eventType),
+    meta?.label ?? tick.source,
+    meta
+      ? getEventTypeLabel(tick.source as TimelineSource, tick.eventType)
+      : tick.eventType,
     new Date(tick.occurredAt).toLocaleString(),
     tick.note,
     tick.tags?.length ? `tags: ${tick.tags.join(", ")}` : undefined,
