@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
-const jetbrains = JetBrains_Mono({
+const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
-  variable: "--font-jetbrains",
+  weight: "400",
+  variable: "--font-instrument-serif",
 });
 
 export const metadata: Metadata = {
-  title: "ProgressGoat",
-  description: "ASCII project timeline dashboard.",
+  title: "progressgoat",
+  description: "Daily goal and progress log.",
 };
 
 export default function RootLayout({
@@ -19,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${jetbrains.variable} font-mono antialiased`}>
+      <body
+        className={`${instrumentSerif.variable} ${instrumentSerif.className} antialiased`}
+      >
         {children}
       </body>
     </html>

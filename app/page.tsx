@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+import { DailyLog } from "./daily-log";
 
 export default function HomePage() {
-  redirect("/dashboard");
+  return (
+    <main className="min-h-dvh w-full bg-white text-black">
+      <DailyLog />
+    </main>
+  );
 }
