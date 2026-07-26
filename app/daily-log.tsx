@@ -12,6 +12,16 @@ import {
 } from "@/lib/daily-log";
 
 const PLACEHOLDER = "What have you done today?";
+const PLACEHOLDER_COLORS = [
+  "#2563eb", // blue
+  "#dc2626", // red
+  "#16a34a", // green
+  "#9333ea", // purple
+  "#eab308", // yellow
+  "#ea580c", // orange
+  "#0891b2", // cyan
+  "#db2777", // pink
+];
 
 export function DailyLog() {
   const [dateKey, setDateKey] = useState(todayKey);
@@ -20,10 +30,12 @@ export function DailyLog() {
   const [streak, setStreak] = useState(0);
   const [status, setStatus] = useState<"idle" | "saved" | "copied">("idle");
   const [exported, setExported] = useState(false);
+  const [colorTick, setColorTick] = useState(0);
 
   const isToday = dateKey === todayKey();
   const canGoNext = dateKey < todayKey();
   const dirty = draft.trim() !== saved.trim();
+  const showPlaceholder = draft.length === 0;
 
   useEffect(() => {
     const loaded = loadEntry(dateKey);
@@ -32,6 +44,14 @@ export function DailyLog() {
     setStreak(computeStreak());
     setStatus("idle");
   }, [dateKey]);
+
+  useEffect(() => {
+    if (!showPlaceholder) return;
+    const id = window.setInterval(() => {
+      setColorTick((tick) => tick + 1);
+    }, 40);
+    return () => window.clearInterval(id);
+  }, [showPlaceholder]);
 
   function go(days: number) {
     const next = shiftDateKey(dateKey, days);
@@ -86,21 +106,42 @@ export function DailyLog() {
 
       <label className="flex flex-1 cursor-text items-center justify-center px-6 py-28">
         <span className="sr-only">Today&apos;s log</span>
-        <input
-          type="text"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              handleSave();
-            }
-          }}
-          placeholder={PLACEHOLDER}
-          spellCheck
-          autoFocus={isToday}
-          className="daily-log-input w-full max-w-4xl bg-transparent text-center text-[clamp(1.75rem,4vw,2.75rem)] font-normal leading-none tracking-tight text-black outline-none placeholder:text-black"
-        />
+        <span className="relative w-full max-w-4xl">
+          {showPlaceholder ? (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0 flex items-center justify-center text-[clamp(1.75rem,4vw,2.75rem)] font-normal leading-none tracking-tight uppercase"
+            >
+              {PLACEHOLDER.split("").map((char, index) => (
+                <span
+                  key={`${char}-${index}`}
+                  style={{
+                    color:
+                      PLACEHOLDER_COLORS[
+                        (index + colorTick) % PLACEHOLDER_COLORS.length
+                      ],
+                  }}
+                >
+                  {char === " " ? "\u00a0" : char}
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <input
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleSave();
+              }
+            }}
+            spellCheck
+            autoFocus={isToday}
+            className={`daily-log-input relative w-full bg-transparent text-center text-[clamp(1.75rem,4vw,2.75rem)] font-normal leading-none tracking-tight text-black outline-none ${showPlaceholder ? "caret-transparent" : ""}`}
+          />
+        </span>
       </label>
 
       <footer className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-6 px-6 pb-6 text-[15px] tracking-tight text-black/35 md:pb-8">

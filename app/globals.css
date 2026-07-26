@@ -32,12 +32,6 @@ body {
   border: 0;
 }
 
-.daily-log-input::placeholder {
-  color: #000000;
-  opacity: 1;
-  text-transform: uppercase;
-}
-
 .daily-log-input::-webkit-scrollbar {
   display: none;
 }
