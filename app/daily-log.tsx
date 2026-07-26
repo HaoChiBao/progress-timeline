@@ -73,11 +73,11 @@ export function DailyLog() {
   return (
     <div className="relative flex min-h-dvh w-full flex-col">
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between px-6 pt-5 md:px-8 md:pt-6">
-        <p className="text-[15px] leading-none tracking-tight lowercase md:text-base">
+        <p className="text-[17px] leading-none tracking-tight lowercase md:text-lg">
           progressgoat
         </p>
         <p
-          className="text-[15px] leading-none tracking-tight text-black/40 md:text-base"
+          className="text-[17px] leading-none tracking-tight text-black/40 md:text-lg"
           title="day streak"
         >
           {status === "saved" ? "saved" : streak > 0 ? streak : ""}
@@ -103,7 +103,7 @@ export function DailyLog() {
         />
       </label>
 
-      <footer className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-6 px-6 pb-6 text-[13px] tracking-tight text-black/35 md:pb-8">
+      <footer className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-6 px-6 pb-6 text-[15px] tracking-tight text-black/35 md:pb-8">
         <button
           type="button"
           onClick={() => go(-1)}
